@@ -19,11 +19,11 @@ html,body,[data-testid="stAppViewContainer"]{background:var(--bg)!important;colo
 [data-testid="stSidebar"]{background:var(--surface)!important;border-right:1px solid var(--border)!important;}
 [data-testid="stSidebar"] *{color:var(--text)!important;}
 h1,h2,h3,h4{font-family:'Syne',sans-serif!important;}
-.stButton>button{background:linear-gradient(135deg,var(--accent),#5a3fd4)!important;color:white!important;
+.stButton>button, .stDownloadButton>button {background:linear-gradient(135deg,var(--accent),#5a3fd4)!important;color:white!important;
   border:none!important;border-radius:8px!important;font-family:'Syne',sans-serif!important;
   font-weight:600!important;padding:.5rem 1.5rem!important;transition:all .2s!important;
   box-shadow:0 4px 15px rgba(124,92,252,.3)!important;}
-.stButton>button:hover{transform:translateY(-1px)!important;box-shadow:0 6px 20px rgba(124,92,252,.5)!important;}
+.stButton>button:hover, .stDownloadButton>button:hover {transform:translateY(-1px)!important;box-shadow:0 6px 20px rgba(124,92,252,.5)!important;}
 .metric-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;
   padding:1.2rem 1.5rem;text-align:center;position:relative;overflow:hidden;}
 .metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
@@ -2071,6 +2071,84 @@ elif st.session_state.step == 9:
             except Exception as e:
                 st.error(f"❌ Word error: {e}")
                 with st.expander("Debug"): st.code(traceback.format_exc())
+
+    # ═════ RAW DATA & MODEL DOWNLOADS ═════════════════════════════════
+    st.markdown("---")
+    sh("📥", "Data & Model Export", "Download your intermediate datasets and trained models in various formats")
+    st.markdown("<br>", unsafe_allow_html=True)
+    dc1, dc2, dc3 = st.columns(3)
+    
+    for col, fmt_icon, fmt_title, fmt_desc in [
+        (dc1, "🧼", "Clean Dataset", "Data after missing values & duplicates handled"),
+        (dc2, "⚙️", "Preprocessing Dataset", "Fully transformed, encoded & scaled data"),
+        (dc3, "🧠", "Model Train", "Best trained model architecture & weights"),
+    ]:
+        with col:
+            st.markdown(f"""<div class="metric-card" style="min-height:{CARD_H};margin-bottom:1rem">
+            <div style="font-size:2.5rem;margin-bottom:.3rem">{fmt_icon}</div>
+            <div style="font-weight:700;color:var(--accent2);font-size:1.05rem">{fmt_title}</div>
+            <div style="font-size:.76rem;color:var(--muted);margin-top:.4rem;line-height:1.5">{fmt_desc}</div>
+            </div>""", unsafe_allow_html=True)
+
+    # Dropdowns row
+    sc1, sc2, sc3 = st.columns(3)
+    opts_data = ["CSV (.csv)", "Excel (.xlsx)", "JSON (.json)", "XML (.xml)", "YAML (.yaml)", "SQLite DB (.db)"]
+    with sc1: c_fmt = st.selectbox("Format", opts_data, key="fmt_clean", label_visibility="collapsed")
+    with sc2: p_fmt = st.selectbox("Format", opts_data, key="fmt_prep", label_visibility="collapsed")
+    with sc3: m_fmt = st.selectbox("Format", ["Pickle (.pkl)", "ONNX (.onnx)", "Joblib (.joblib)", "Tensorflow (.zip)", "Torch (.pt)"], key="fmt_model", label_visibility="collapsed")
+
+    def get_dl_data(df, fmt):
+        if "CSV" in fmt: return df.to_csv(index=False).encode('utf-8'), "text/csv", "csv"
+        elif "Excel" in fmt:
+            buf = io.BytesIO(); df.to_excel(buf, index=False); return buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"
+        elif "JSON" in fmt: return df.to_json(orient='records').encode('utf-8'), "application/json", "json"
+        elif "XML" in fmt: return df.to_xml(index=False).encode('utf-8'), "application/xml", "xml"
+        elif "YAML" in fmt:
+            import yaml; return yaml.dump(df.to_dict(orient='records'), sort_keys=False).encode('utf-8'), "application/x-yaml", "yaml"
+        else: # SQLite
+            import sqlite3, tempfile, os
+            with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp: tmp_name = tmp.name
+            conn = sqlite3.connect(tmp_name); df.to_sql("dataset", conn, index=False, if_exists="replace"); conn.close()
+            with open(tmp_name, "rb") as f: data_bytes = f.read()
+            os.remove(tmp_name)
+            return data_bytes, "application/octet-stream", "db"
+
+    # Buttons row
+    bc1, bc2, bc3 = st.columns(3)
+    
+    with bc1:
+        df_c = st.session_state.get("df_cleaned_only", st.session_state.get("df_raw"))
+        if df_c is not None:
+            data_bytes, mime, ext = get_dl_data(df_c, c_fmt)
+            st.download_button(f"⬇️ Download {ext.upper()}", data=data_bytes, file_name=f"clean_dataset.{ext}", mime=mime, use_container_width=True)
+        else:
+            st.button("No Clean Data", disabled=True, use_container_width=True, key="btn_c_dis")
+            
+    with bc2:
+        df_p = st.session_state.get("df_clean")
+        if df_p is not None:
+            data_bytes, mime, ext = get_dl_data(df_p, p_fmt)
+            st.download_button(f"⬇️ Download {ext.upper()}", data=data_bytes, file_name=f"preprocessed_dataset.{ext}", mime=mime, use_container_width=True)
+        else:
+            st.button("No Preprocessed Data", disabled=True, use_container_width=True, key="btn_p_dis")
+            
+    with bc3:
+        best_name = st.session_state.get("best_model_name")
+        trained_models = st.session_state.get("trained_models", {})
+        if best_name and best_name in trained_models:
+            model_obj = trained_models[best_name]
+            f_type = m_fmt.split()[0].lower()
+            X_sample = st.session_state.get("X_test")
+            if X_sample is None: X_sample = st.session_state.get("df_clean")
+            if X_sample is not None: X_sample = X_sample.head(1)
+            model_bytes, mime_or_err = export_model(model_obj, f_type, X_sample)
+            if model_bytes:
+                ext = "zip" if f_type == "tensorflow" else ("pt" if f_type == "torch" else m_fmt.split(" (.")[1][:-1])
+                st.download_button(f"⬇️ Download {ext.upper()}", data=model_bytes, file_name=f"{best_name.replace(' ','_')}.{ext}", mime=mime_or_err, use_container_width=True)
+            else:
+                st.button(f"Error: {mime_or_err[:15]}...", disabled=True, use_container_width=True, help=mime_or_err, key="btn_m_err")
+        else:
+            st.button("No Trained Model", disabled=True, use_container_width=True, key="btn_m_dis")
 
     #  New Pipeline 
     st.markdown("---")
