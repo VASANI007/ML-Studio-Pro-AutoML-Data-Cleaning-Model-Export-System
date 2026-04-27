@@ -104,6 +104,7 @@ def footer():
 def detect_problem_type(df, target_col):
     if target_col not in df.columns: return "classification"
     y = df[target_col].dropna()
+    if y.empty: return "classification"  # guard: all-null column
     if y.dtype == "object": return "classification"
     if pd.api.types.is_numeric_dtype(y) and y.nunique() < max(10, int(0.05*len(y))):
         return "classification"
@@ -324,7 +325,7 @@ elif st.session_state.step == 3:
                         cv = st.text_input(f"Value for `{col}`", key=f"cv_{col}")
                         if cv:
                             try: custom_vals[col] = float(cv) if is_num else cv
-                            except: custom_vals[col] = cv
+                            except Exception: custom_vals[col] = cv
                 with cc2:
                     sample = df[col].dropna().head(5).tolist()
                     st.markdown(f"**Sample:** `{sample}`")
@@ -466,7 +467,7 @@ elif st.session_state.step == 5:
         if "Encoding" in val: return "background:rgba(124,92,252,.15);color:#a78bfa"
         return "background:rgba(255,179,71,.1);color:#ffb347"
 
-    styled = ai_guide_df.style.applymap(_style_action, subset=["Recommended Action"])
+    styled = ai_guide_df.style.map(_style_action, subset=["Recommended Action"])
     st.dataframe(styled, use_container_width=True, height=min(35*len(ai_guide_df)+40, 380))
     st.markdown("""<div class="ai-card" style="font-size:.82rem">
     ⚡ <strong>Preprocessing is optional.</strong> The AI recommendations above are suggestions based on your data.
@@ -1229,7 +1230,7 @@ elif st.session_state.step == 9:
         "🧹 Missing Value Handling Log":     st.session_state.missing_applied,
         "♻️ Duplicate Removal Log":          st.session_state.dup_removed,
         "⚙️ Preprocessing Steps":            len(st.session_state.preprocessing_log) > 0,
-        "📋 Clean Dataset (first 500 rows)": df_clean is not None,
+        "📋 Clean Dataset": df_clean is not None,
         "🤖 Model Training Results":         results_df is not None,
         "🔵 Clustering Silhouette Scores":   cluster_res is not None,
         "💡 AI Recommendations":             True,
@@ -1242,7 +1243,7 @@ elif st.session_state.step == 9:
                 selected[lbl] = st.checkbox(lbl, value=True, key=f"chk_{i}")
             else:
                 st.checkbox(lbl, value=False, disabled=True, key=f"chkd_{i}",
-                            help="Step not completed")
+                            help="Step not completed or All ready available")
                 selected[lbl] = False
 
     st.markdown("---")
@@ -1306,13 +1307,29 @@ elif st.session_state.step == 9:
                         ws(get_column_summary(df_clean), "🔍 Column Summary")
                         ns = get_numeric_stats(df_clean)
                         if not ns.empty: ws(ns, "📈 Numeric Stats")
+                        
+                        # Add correlation matrix
+                        numeric_cols = df_clean.select_dtypes(include=['number']).columns
+                        if len(numeric_cols) > 1:
+                            corr = df_clean[numeric_cols].corr()
+                            # Reset index to include column names in the sheet
+                            corr_export = corr.reset_index().rename(columns={'index': 'Feature'})
+                            ws(corr_export, "🔗 Correlation Matrix")
 
                     if selected.get("⚙️ Preprocessing Steps") and st.session_state.preprocessing_log:
                         ws(pd.DataFrame({"Step": range(1, len(st.session_state.preprocessing_log)+1),
                                          "Action": st.session_state.preprocessing_log}), "⚙️ Preprocessing")
 
-                    if selected.get("📋 Clean Dataset (first 500 rows)") and df_clean is not None:
-                        ws(df_clean.head(500), "📋 Clean Data")
+                    if selected.get("🧹 Missing Value Handling Log") and st.session_state.missing_applied:
+                        ws(pd.DataFrame([{"Metric": "Strategy", "Value": "AI-Driven Imputation"},
+                                         {"Metric": "Applied", "Value": "Yes"}]), "🧹 Missing Handling")
+
+                    if selected.get("♻️ Duplicate Removal Log") and st.session_state.dup_removed:
+                        ws(pd.DataFrame([{"Metric": "Duplicates Removed", "Value": "Yes"},
+                                         {"Metric": "Status", "Value": "Cleaned"}]), "♻️ Duplicate Removal")
+
+                    if selected.get("📋 Clean Dataset") and df_clean is not None:
+                        ws(df_clean.head(100), "📋 Clean Data")
 
                     if selected.get("🤖 Model Training Results") and results_df is not None:
                         ws(results_df, "🤖 Model Results")
@@ -1322,13 +1339,19 @@ elif st.session_state.step == 9:
                                           for k,v in cluster_res.items()]), "🔵 Clustering")
 
                     if selected.get("💡 AI Recommendations"):
-                        rows = []
-                        if ai_report.get("problem_type"): rows.append(["Recommended Task", ai_report["problem_type"]])
-                        for m in ai_report.get("recommended_models",[]): rows.append(["Recommended Model", m])
-                        for f in ai_report.get("important_features",[]): rows.append(["Top Feature", str(f)])
+                        rows = [["Project Objective", (problem_type or "N/A").upper()],
+                                ["Target Metric", "F1/R2 Score (Maximization)"],
+                                ["", ""],
+                                ["🏆 RECOMMENDED ACTION", f"Deploy {best_name or 'the top model'} for production use."]]
+                        for m in ai_report.get("recommended_models",[]): rows.append(["Suggested Model", m])
+                        for f in ai_report.get("important_features",[]): rows.append(["Key Feature", str(f)])
                         cl = ai_report.get("clustering",{})
-                        if cl.get("recommended"): rows.append(["Best Clustering", f"{cl['recommended']} — {cl.get('reason','')}"])
-                        if rows: ws(pd.DataFrame(rows, columns=["Category","Value"]), "💡 AI Guide")
+                        if cl.get("recommended"): rows.append(["Cluster Strategy", f"{cl['recommended']} — {cl.get('reason','')}"])
+                        rows.append(["", ""])
+                        rows.append(["🚀 NEXT STEPS", "1. Download the Pickle/ONNX model files."])
+                        rows.append(["", "2. Integrate the model into your application pipeline."])
+                        rows.append(["", "3. Monitor model drift with fresh data over time."])
+                        if rows: ws(pd.DataFrame(rows, columns=["Insight Category","Actionable Guidance"]), "💡 AI Guide")
 
                 # Apply ultra-pro styling
                 buf.seek(0)
@@ -1345,15 +1368,18 @@ elif st.session_state.step == 9:
 
                 # Sheet-specific accent colors
                 SHEET_COLORS = {
-                    "📋 Cover":       (C_NAVY, C_ALT1, "1E3A5F"),
-                    "📊 Overview":    (C_NAVY, C_ALT1, "1E3A5F"),
+                    "📋 Cover":          (C_NAVY, C_ALT1, "1E3A5F"),
+                    "📊 Overview":       (C_NAVY, C_ALT1, "1E3A5F"),
                     "🔍 Column Summary": (C_PURP, C_ALT1, "7C5CFC"),
                     "📈 Numeric Stats":  (C_TEAL, C_ALT2, "00608A"),
-                    "⚙️ Preprocessing": (C_PURP, C_ALT1, "7C5CFC"),
-                    "📋 Clean Data":    (C_NAVY, C_ALT1, "1E3A5F"),
-                    "🤖 Model Results": (C_NAVY, C_ALT1, "1E3A5F"),
-                    "🔵 Clustering":    (C_TEAL, C_ALT2, "00608A"),
-                    "💡 AI Guide":      (C_GOLD, C_ALT3, "B8860B"),
+                    "🔗 Correlation Matrix": (C_PURP, C_ALT1, "7C5CFC"),
+                    "⚙️ Preprocessing":  (C_PURP, C_ALT1, "7C5CFC"),
+                    "🧹 Missing Handling": (C_TEAL, C_ALT2, "00608A"),
+                    "♻️ Duplicate Removal": (C_PURP, C_ALT1, "7C5CFC"),
+                    "📋 Clean Data":     (C_NAVY, C_ALT1, "1E3A5F"),
+                    "🤖 Model Results":  (C_NAVY, C_ALT1, "1E3A5F"),
+                    "🔵 Clustering":     (C_TEAL, C_ALT2, "00608A"),
+                    "💡 AI Guide":       (C_GOLD, C_ALT3, "B8860B"),
                 }
 
                 thin = Side(style="thin", color="C0C0D8")
@@ -1390,6 +1416,41 @@ elif st.session_state.step == 9:
                     ws_obj.auto_filter.ref = ws_obj.dimensions
                     ws_obj.sheet_properties.tabColor = tab_c
 
+                #  Interactive Hyperlinks on Cover 
+                if "📋 Cover" in wb.sheetnames:
+                    ws_c = wb["📋 Cover"]
+                    
+                    # Merge and style the title cell
+                    ws_c.merge_cells("A2:B2")
+                    title_cell = ws_c["A2"]
+                    title_cell.font = Font(color="FFFFFF", bold=True, name="Calibri", size=12)
+                    title_cell.fill = PatternFill("solid", fgColor="1E3A5F")
+                    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+                    
+                    # Add dynamic links to all generated sheets
+                    link_idx = 10
+                    for sname in wb.sheetnames:
+                        if sname != "📋 Cover":
+                            icon = sname.split()[0] if " " in sname else "➡️"
+                            name_part = sname.split(" ", 1)[1] if " " in sname else sname
+                            cell = ws_c.cell(row=link_idx, column=1, value=f"{icon} Go to {name_part}")
+                            cell.hyperlink = f"#'{sname}'!A1"
+                            cell.font = Font(color="0000FF", underline="single", name="Calibri", size=10)
+                            cell.alignment = Alignment(horizontal="left")
+                            link_idx += 1
+
+                # Data Bars for Model Results
+                if "🤖 Model Results" in wb.sheetnames and results_df is not None:
+                    from openpyxl.formatting.rule import DataBarRule
+                    ws_m = wb["🤖 Model Results"]
+                    n_rows = len(results_df) + 1
+                    n_cols = len(results_df.columns)
+                    # Apply Data Bars to the primary metric column
+                    target_col = 2 # Usually Accuracy or F1
+                    col_letter = get_column_letter(target_col)
+                    ws_m.conditional_formatting.add(f"{col_letter}2:{col_letter}{n_rows}", 
+                        DataBarRule(start_type="min", end_type="max", color="638EC6", showValue=True, minLength=None, maxLength=None))
+
                 # Conditional formatting on Model Results
                 if "🤖 Model Results" in wb.sheetnames and results_df is not None:
                     from openpyxl.formatting.rule import ColorScaleRule
@@ -1414,9 +1475,39 @@ elif st.session_state.step == 9:
                         cats_ref = Reference(ws_m, min_col=1, min_row=2, max_row=n_rows)
                         chart.add_data(data_ref, titles_from_data=True)
                         chart.set_categories(cats_ref)
-                        chart.width = 22; chart.height = 14
+                        chart.width = 25; chart.height = 12
                         ws_m.add_chart(chart, f"A{n_rows+3}")
                     except Exception: pass
+
+                # Clustering chart
+                if "🔵 Clustering" in wb.sheetnames and cluster_res:
+                    try:
+                        chart_c = BarChart()
+                        chart_c.type = "col"
+                        chart_c.title = "Silhouette Scores by Algorithm"
+                        chart_c.style = 10
+                        ws_cl = wb["🔵 Clustering"]
+                        n_rows_cl = len(cluster_res) + 1
+                        data_ref = Reference(ws_cl, min_col=2, max_col=2, min_row=1, max_row=n_rows_cl)
+                        cats_ref = Reference(ws_cl, min_col=1, min_row=2, max_row=n_rows_cl)
+                        chart_c.add_data(data_ref, titles_from_data=True)
+                        chart_c.set_categories(cats_ref)
+                        chart_c.width = 15; chart_c.height = 10
+                        ws_cl.add_chart(chart_c, f"A{n_rows_cl+3}")
+                    except Exception: pass
+
+                # Heatmap for Correlation Matrix
+                if "🔗 Correlation Matrix" in wb.sheetnames:
+                    from openpyxl.formatting.rule import ColorScaleRule
+                    ws_c = wb["🔗 Correlation Matrix"]
+                    n_rows = ws_c.max_row; n_cols = ws_c.max_column
+                    # Symmetric color scale for correlation (-1 to 1)
+                    rng = f"B2:{get_column_letter(n_cols)}{n_rows}"
+                    ws_c.conditional_formatting.add(rng, ColorScaleRule(
+                        start_type="num", start_value=-1, start_color="FF6B6B",
+                        mid_type="num", mid_value=0, mid_color="FFFFFF",
+                        end_type="num", end_value=1, end_color="00D4AA"
+                    ))
 
                 styled = io.BytesIO(); wb.save(styled); styled.seek(0)
                 st.download_button("💾 ML_Studio_Report.xlsx", data=styled.getvalue(),
@@ -1460,32 +1551,34 @@ elif st.session_state.step == 9:
                     leftMargin=1.8*cm, rightMargin=1.8*cm, topMargin=2*cm, bottomMargin=2*cm)
                 S = getSampleStyleSheet()
 
-                sT   = ParagraphStyle("T",  textColor=NAVY,  fontSize=28, fontName="Helvetica-Bold", alignment=TA_CENTER, spaceAfter=4)
-                sSB  = ParagraphStyle("SB", textColor=TEL,   fontSize=11, fontName="Helvetica",      alignment=TA_CENTER, spaceAfter=16)
-                sH2  = ParagraphStyle("H2", textColor=WHT,   fontSize=12, fontName="Helvetica-Bold", spaceBefore=14, spaceAfter=0,
+                sT   = ParagraphStyle("T",  textColor=NAVY,  fontSize=28, leading=34, fontName="Helvetica-Bold", alignment=TA_CENTER, spaceAfter=4)
+                sSB  = ParagraphStyle("SB", textColor=TEL,   fontSize=11, leading=14, fontName="Helvetica",      alignment=TA_CENTER, spaceAfter=16)
+                sH2  = ParagraphStyle("H2", textColor=WHT,   fontSize=12, leading=14, fontName="Helvetica-Bold", spaceBefore=14, spaceAfter=0,
                                       backColor=NAVY, leftIndent=0, rightIndent=0, borderPad=7)
-                sBD  = ParagraphStyle("BD", fontSize=9,  fontName="Helvetica", textColor=DRK, spaceAfter=3, leftIndent=10)
-                sMT  = ParagraphStyle("MT", fontSize=8,  fontName="Helvetica", textColor=GRY, spaceAfter=2, leftIndent=10)
+                sBD  = ParagraphStyle("BD", fontSize=9,  leading=12, fontName="Helvetica", textColor=DRK, spaceAfter=3, leftIndent=10)
+                sMT  = ParagraphStyle("MT", fontSize=8,  leading=10, fontName="Helvetica", textColor=GRY, spaceAfter=2, leftIndent=10)
 
                 def sec_hdr(txt, color=NAVY):
-                    bg = ParagraphStyle("sh", textColor=WHT, fontSize=12, fontName="Helvetica-Bold",
-                                        spaceBefore=14, spaceAfter=4, backColor=color,
-                                        leftIndent=0, rightIndent=0, borderPad=8)
+                    bg = ParagraphStyle("sh", textColor=WHT, fontSize=14, leading=16, fontName="Helvetica-Bold",
+                                        spaceBefore=16, spaceAfter=6, backColor=color,
+                                        leftIndent=0, rightIndent=0, borderPad=10)
                     return Paragraph(f"  {txt}", bg)
 
                 def make_table(data, cw=None, hdr=NAVY, alt=BGLT):
-                    t = Table(data, colWidths=cw, repeatRows=1)
+                    t = Table(data, colWidths=cw, repeatRows=1, hAlign='LEFT')
                     t.setStyle(TableStyle([
                         ("BACKGROUND",    (0,0), (-1,0), hdr),
+                        ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHT, alt]),
                         ("TEXTCOLOR",     (0,0), (-1,0), WHT),
                         ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
-                        ("FONTSIZE",      (0,0), (-1,-1), 8.5),
-                        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+                        ("FONTSIZE",      (0,0), (-1,0), 11),
+                        ("FONTSIZE",      (0,1), (-1,-1), 9),
+                        ("ALIGN",         (0,0), (-1,-1), "LEFT"),
                         ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-                        ("PADDING",       (0,0), (-1,-1), 5),
+                        ("PADDING",       (0,0), (-1,-1), 6),
+                        ("TOPPADDING",    (0,0), (-1,0), 10),
+                        ("BOTTOMPADDING", (0,0), (-1,0), 10),
                         ("GRID",          (0,0), (-1,-1), 0.4, colors.HexColor("#B0B8E0")),
-                        ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHT, alt]),
-                        ("BOTTOMPADDING", (0,0), (-1,0), 7),
                     ]))
                     return t
 
@@ -1549,9 +1642,10 @@ elif st.session_state.step == 9:
                                      ["Dataset", f"{_rows:,} rows × {_cols} columns"],
                                      ["Best Model", best_name or "N/A"],
                                      ["Task Type", (problem_type or "N/A").title()]]
-                _ct = Table(_cover_table_data, colWidths=[6*cm, 9*cm])
+                _ct = Table(_cover_table_data, colWidths=[6*cm, 11.4*cm], hAlign='LEFT')
                 _ct.setStyle(TableStyle([
                     ("BACKGROUND", (0,0), (-1,0), NAVY),
+                    ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.HexColor("#EEF2FF"), colors.white]),
                     ("TEXTCOLOR",  (0,0), (-1,0), TEL),
                     ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
                     ("FONTSIZE",   (0,0), (-1,0), 16),
@@ -1561,14 +1655,16 @@ elif st.session_state.step == 9:
                     ("FONTNAME",   (1,1), (1,-1), "Helvetica"),
                     ("FONTSIZE",   (0,1), (-1,-1), 10),
                     ("ALIGN",      (0,0), (-1,-1), "LEFT"),
+                    ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
                     ("PADDING",    (0,0), (-1,-1), 10),
+                    ("TOPPADDING", (0,0), (-1,0), 12),
+                    ("BOTTOMPADDING",(0,0),(-1,0), 12),
                     ("GRID",       (0,0), (-1,-1), 0.5, colors.HexColor("#C0C0D8")),
-                    ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.HexColor("#EEF2FF"), colors.white]),
                 ]))
 
                 story = [
                     Spacer(1, 1.5*cm),
-                    Paragraph("⚡  ML Studio Pro", sT),
+                    Paragraph("ML Studio Pro", sT),
                     Paragraph("Machine Learning Session Report", sSB),
                     HRFlowable(width="100%", color=NAVY, thickness=4),
                     Spacer(1, 0.8*cm),
@@ -1580,35 +1676,71 @@ elif st.session_state.step == 9:
 
                 if selected.get("📊 Dataset Overview") and df_clean is not None:
                     info = get_basic_info(df_clean)
-                    story += [sec_hdr("📊  Dataset Overview"), Spacer(1,4)]
+                    story += [sec_hdr("Dataset Overview"), Spacer(1,4)]
                     data = [["Metric","Value"],
                             ["Total Rows", f"{info['rows']:,}"],
                             ["Total Columns", str(info["columns"])],
                             ["Missing (post-clean)", str(int(df_clean.isna().sum().sum()))],
                             ["Best Model", best_name or "N/A"],
                             ["Task Type", problem_type or "N/A"]]
-                    story += [make_table(data, cw=[8.5*cm,6.5*cm]), Spacer(1,10)]
+                    story += [make_table(data, cw=[8.5*cm,8.9*cm]), Spacer(1,10)]
 
                 if selected.get("🔍 Column Profiling Summary") and df_clean is not None:
-                    story += [sec_hdr("🔍  Column Profiling"), Spacer(1,4)]
+                    story += [sec_hdr("Column Profiling"), Spacer(1,4)]
                     cs = get_column_summary(df_clean)
                     hdr_r = list(cs.columns)
                     rows_r = [[str(v) for v in r] for _,r in cs.head(15).iterrows()]
                     cw_r = [(W-3.6*cm)/len(hdr_r)]*len(hdr_r)
                     story += [make_table([hdr_r]+rows_r, cw=cw_r, alt=BGTL, hdr=PRP), Spacer(1,10)]
+                    
+                    ns = get_numeric_stats(df_clean)
+                    if not ns.empty:
+                        story += [sec_hdr("Numeric Stats", color=colors.HexColor("#00608A")), Spacer(1,4)]
+                        hdr_ns = list(ns.columns)
+                        rows_ns = [[str(round(v,4) if isinstance(v,float) else v) for v in r] for _,r in ns.head(15).iterrows()]
+                        cw_ns = [(W-3.6*cm)/len(hdr_ns)]*len(hdr_ns)
+                        story += [make_table([hdr_ns]+rows_ns, cw=cw_ns, alt=colors.HexColor("#E8FFF9"), hdr=colors.HexColor("#00608A")), Spacer(1,10)]
+                    
+                    numeric_cols = df_clean.select_dtypes(include=['number']).columns
+                    if len(numeric_cols) > 1:
+                        corr = df_clean[numeric_cols].corr()
+                        corr_export = corr.reset_index().rename(columns={'index': 'Feature'})
+                        story += [sec_hdr("Correlation Matrix", color=PRP), Spacer(1,4)]
+                        hdr_c = list(corr_export.columns)
+                        rows_c = [[str(round(v,4) if isinstance(v,float) else v)[:8] for v in r] for _,r in corr_export.iterrows()]
+                        cw_c = [(W-3.6*cm)/len(hdr_c)]*len(hdr_c)
+                        story += [make_table([hdr_c]+rows_c, cw=cw_c, alt=BGTL, hdr=PRP), Spacer(1,10)]
 
                 if selected.get("⚙️ Preprocessing Steps") and st.session_state.preprocessing_log:
-                    story += [sec_hdr("⚙️  Preprocessing Steps"), Spacer(1,4)]
+                    story += [sec_hdr("Preprocessing Steps"), Spacer(1,4)]
                     pdata = [["#","Action"]] + [[str(i+1), step] for i,step in enumerate(st.session_state.preprocessing_log)]
                     story += [make_table(pdata, cw=[1.5*cm, 13*cm], hdr=PRP), Spacer(1,10)]
 
+                if selected.get("🧹 Missing Value Handling Log") and st.session_state.missing_applied:
+                    story += [sec_hdr("Missing Handling", color=colors.HexColor("#00608A")), Spacer(1,4)]
+                    mdata = [["Metric", "Value"], ["Strategy", "AI-Driven Imputation"], ["Applied", "Yes"]]
+                    story += [make_table(mdata, cw=[6.5*cm, 10.9*cm], hdr=colors.HexColor("#00608A")), Spacer(1,10)]
+
+                if selected.get("♻️ Duplicate Removal Log") and st.session_state.dup_removed:
+                    story += [sec_hdr("Duplicate Removal", color=PRP), Spacer(1,4)]
+                    ddata = [["Metric", "Value"], ["Duplicates Removed", "Yes"], ["Status", "Cleaned"]]
+                    story += [make_table(ddata, cw=[6.5*cm, 10.9*cm], hdr=PRP), Spacer(1,10)]
+                    
+                if selected.get("📋 Clean Dataset") and df_clean is not None:
+                    story += [sec_hdr("Clean Data (First 30 rows)", color=NAVY), Spacer(1,4)]
+                    cd_df = df_clean.head(30)
+                    hdr_cd = list(cd_df.columns)
+                    rows_cd = [[str(round(v,4) if isinstance(v,float) else v)[:12] for v in r] for _,r in cd_df.iterrows()]
+                    cw_cd = [(W-3.6*cm)/len(hdr_cd)]*len(hdr_cd)
+                    story += [make_table([hdr_cd]+rows_cd, cw=cw_cd, alt=BGLT, hdr=NAVY), Spacer(1,10)]
+
                 if selected.get("🤖 Model Training Results") and results_df is not None:
-                    story += [sec_hdr("🤖  Model Training Results"), Spacer(1,4)]
+                    story += [sec_hdr("Model Training Results"), Spacer(1,4)]
                     hdr_r = list(results_df.columns)
                     rows_r = [[str(round(v,4) if isinstance(v,float) else v) for v in r] for _,r in results_df.iterrows()]
                     cw_r = [(W-3.6*cm)/len(hdr_r)]*len(hdr_r)
                     story += [make_table([hdr_r]+rows_r, cw=cw_r), Spacer(1,6)]
-                    story.append(Paragraph(f"  🏆  Best Model: {best_name}", sBD))
+                    story.append(Paragraph(f"Best Model: {best_name}", sBD))
                     # Add bar chart
                     num_res = results_df.select_dtypes("number").columns.tolist()
                     if num_res and len(results_df) > 0:
@@ -1621,9 +1753,9 @@ elif st.session_state.step == 9:
                                       Spacer(1,10)]
 
                 if selected.get("🔵 Clustering Silhouette Scores") and cluster_res:
-                    story += [sec_hdr("🔵  Clustering Results", color=colors.HexColor("#00608A")), Spacer(1,4)]
+                    story += [sec_hdr("Clustering Results", color=colors.HexColor("#00608A")), Spacer(1,4)]
                     cdata = [["Algorithm","Silhouette Score"]] + [[k, str(v["score"])] for k,v in cluster_res.items()]
-                    story += [make_table(cdata, cw=[8.5*cm,6.5*cm], hdr=colors.HexColor("#00608A"), alt=BGTL),
+                    story += [make_table(cdata, cw=[8.5*cm,8.9*cm], hdr=colors.HexColor("#00608A"), alt=BGTL),
                               Spacer(1,8)]
                     # Cluster bar chart
                     cl_labels = list(cluster_res.keys())
@@ -1631,14 +1763,33 @@ elif st.session_state.step == 9:
                     story += [bar_chart_pdf(cl_labels, cl_scores, "Silhouette Scores by Algorithm"), Spacer(1,10)]
 
                 if selected.get("💡 AI Recommendations"):
-                    story += [sec_hdr("💡  AI Recommendations", color=colors.HexColor("#B8860B")), Spacer(1,6)]
+                    story += [sec_hdr("AI Recommendations", color=colors.HexColor("#B8860B")), Spacer(1,6)]
                     pts = []
-                    if ai_report.get("problem_type"): pts.append(f"🎯  Problem Type: <b>{ai_report['problem_type']}</b>")
-                    if ai_report.get("recommended_models"): pts.append("🧠  Models: " + ", ".join(ai_report["recommended_models"][:5]))
-                    if ai_report.get("important_features"): pts.append("⭐  Top Features: " + ", ".join([str(f) for f in ai_report["important_features"][:5]]))
+                    pts.append(f"<b>Project Objective:</b> {(problem_type or 'N/A').upper()}")
+                    pts.append("<b>Target Metric:</b> F1/R2 Score (Maximization)")
+                    pts.append("")
+                    pts.append(f"<b>RECOMMENDED ACTION:</b> Deploy {best_name or 'the top model'} for production use.")
+                    
+                    if ai_report.get("recommended_models"):
+                        pts.append("<b>Suggested Models:</b> " + ", ".join(ai_report["recommended_models"][:5]))
+                    if ai_report.get("important_features"):
+                        pts.append("<b>Key Features:</b> " + ", ".join([str(f) for f in ai_report["important_features"][:5]]))
+                    
                     cl = ai_report.get("clustering",{})
-                    if cl.get("recommended"): pts.append(f"🔵  Best Clustering: {cl['recommended']} — {cl.get('reason','')}")
-                    for pt in pts: story.append(Paragraph(f"• {pt}", sBD))
+                    if cl.get("recommended"):
+                        pts.append(f"<b>Cluster Strategy:</b> {cl['recommended']} — {cl.get('reason','')}")
+                        
+                    pts.append("")
+                    pts.append("<b>NEXT STEPS:</b>")
+                    pts.append("  1. Download the Pickle/ONNX model files.")
+                    pts.append("  2. Integrate the model into your application pipeline.")
+                    pts.append("  3. Monitor model drift with fresh data over time.")
+
+                    for pt in pts: 
+                        if pt.strip() == "":
+                            story.append(Spacer(1,6))
+                        else:
+                            story.append(Paragraph(f"• {pt}" if "1." not in pt and "2." not in pt and "3." not in pt else pt, sBD))
 
                 story += [Spacer(1,1*cm), HRFlowable(width="100%", color=GRY, thickness=1), Spacer(1,6),
                           Paragraph("Generated by ⚡ ML Studio Pro v2.0  |  Advanced AutoML Platform", sSB)]
@@ -1735,19 +1886,6 @@ elif st.session_state.step == 9:
                         cells[ci].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
 
                 dw.add_paragraph()
-                # Page break after cover
-                import docx
-                from docx.oxml import OxmlElement as _oe
-                _pb = _oe('w:p')
-                _ppr = _oe('w:pPr')
-                _pbr = _oe('w:pageBreak')
-                dw.add_paragraph().runs  # placeholder
-                run_pb = dw.paragraphs[-1].add_run()
-                run_pb.add_break(docx.enum.text.WD_BREAK.PAGE) if hasattr(docx, 'enum') else None
-                try:
-                    from docx.enum.text import WD_BREAK
-                    dw.paragraphs[-1].runs[-1].add_break(WD_BREAK.PAGE)
-                except Exception: pass
 
                 def add_sec(icon, title, rgb=(0x1E,0x3A,0x5F)):
                     h = dw.add_heading("", level=1); h.clear()
@@ -1776,7 +1914,7 @@ elif st.session_state.step == 9:
                             cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                     dw.add_paragraph()
 
-                def add_bullet(text, rgb=(0x00,0xD4,0xAA)):
+                def add_bullet(text, rgb=(0x1E,0x3A,0x5F)):
                     p = dw.add_paragraph(); r = p.add_run(f"▸  {text}")
                     r.font.size=Pt(10); r.font.color.rgb=RGBColor(*rgb)
 
@@ -1792,6 +1930,18 @@ elif st.session_state.step == 9:
                 if selected.get("🔍 Column Profiling Summary") and df_clean is not None:
                     add_sec("🔍","Column Profiling", rgb=(0x00,0x60,0x8A))
                     add_table(get_column_summary(df_clean), hdr_hex="00608A", alt_hex="E8FFF9", max_rows=30)
+                    
+                    ns = get_numeric_stats(df_clean)
+                    if not ns.empty:
+                        add_sec("📈","Numeric Stats", rgb=(0x00,0xD4,0xAA))
+                        add_table(ns, hdr_hex="00D4AA", alt_hex="E8FFF9", max_rows=30)
+                        
+                    numeric_cols = df_clean.select_dtypes(include=['number']).columns
+                    if len(numeric_cols) > 1:
+                        corr = df_clean[numeric_cols].corr()
+                        corr_export = corr.reset_index().rename(columns={'index': 'Feature'})
+                        add_sec("🔗","Correlation Matrix", rgb=(0x7C,0x5C,0xFC))
+                        add_table(corr_export, hdr_hex="7C5CFC", alt_hex="F0EEFF", max_rows=30)
 
                 if selected.get("⚙️ Preprocessing Steps") and st.session_state.preprocessing_log:
                     add_sec("⚙️","Preprocessing Steps", rgb=(0x7c,0x5c,0xfc))
@@ -1799,7 +1949,19 @@ elif st.session_state.step == 9:
                                             "Action":st.session_state.preprocessing_log}),
                               hdr_hex="7C5CFC", alt_hex="F0EEFF", max_rows=100)
 
-                if selected.get("📋 Clean Dataset (first 500 rows)") and df_clean is not None:
+                if selected.get("🧹 Missing Value Handling Log") and st.session_state.missing_applied:
+                    add_sec("🧹","Missing Handling", rgb=(0x00,0x60,0x8A))
+                    add_table(pd.DataFrame([{"Metric": "Strategy", "Value": "AI-Driven Imputation"},
+                                            {"Metric": "Applied", "Value": "Yes"}]),
+                              hdr_hex="00608A", alt_hex="E8FFF9")
+
+                if selected.get("♻️ Duplicate Removal Log") and st.session_state.dup_removed:
+                    add_sec("♻️","Duplicate Removal", rgb=(0x7C,0x5C,0xFC))
+                    add_table(pd.DataFrame([{"Metric": "Duplicates Removed", "Value": "Yes"},
+                                            {"Metric": "Status", "Value": "Cleaned"}]),
+                              hdr_hex="7C5CFC", alt_hex="F0EEFF")
+
+                if selected.get("📋 Clean Dataset") and df_clean is not None:
                     add_sec("📋","Clean Dataset (first 20 rows)", rgb=(0x5a,0x3f,0xd4))
                     add_table(df_clean.head(20), hdr_hex="5A3FD4", alt_hex="EDE8FF")
 
@@ -1809,26 +1971,75 @@ elif st.session_state.step == 9:
                     p = dw.add_paragraph(); r = p.add_run(f"🏆  Best Model: {best_name}")
                     r.font.bold=True; r.font.size=Pt(11); r.font.color.rgb=RGBColor(0x00,0xD4,0xAA)
                     dw.add_paragraph()
+                    try:
+                        import matplotlib.pyplot as plt
+                        num_res = results_df.select_dtypes("number").columns.tolist()
+                        if num_res and len(results_df) > 0:
+                            metric_c = "F1 Score" if "F1 Score" in num_res else num_res[0]
+                            fig, ax = plt.subplots(figsize=(6.5, 3.5))
+                            labels = [str(m)[:15]+".." if len(str(m))>16 else str(m) for m in results_df["Model"]]
+                            ax.bar(labels, results_df[metric_c], color="#7C5CFC")
+                            ax.set_title(f"{metric_c} by Model", color="#1E3A5F", fontweight='bold')
+                            ax.spines['top'].set_visible(False)
+                            ax.spines['right'].set_visible(False)
+                            plt.xticks(rotation=45, ha='right')
+                            plt.tight_layout()
+                            img_buf = io.BytesIO()
+                            plt.savefig(img_buf, format='png', dpi=150)
+                            img_buf.seek(0); plt.close(fig)
+                            from docx.shared import Inches
+                            dw.add_picture(img_buf, width=Inches(5.5))
+                            dw.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            dw.add_paragraph()
+                    except Exception: pass
 
                 if selected.get("🔵 Clustering Silhouette Scores") and cluster_res:
                     add_sec("🔵","Clustering Results", rgb=(0x00,0x60,0x8A))
                     add_table(pd.DataFrame([{"Algorithm":k,"Silhouette Score":v["score"]} for k,v in cluster_res.items()]),
                               hdr_hex="00608A", alt_hex="E8FFF9")
+                    try:
+                        import matplotlib.pyplot as plt
+                        cl_labels = list(cluster_res.keys())
+                        cl_scores = [float(v["score"]) for v in cluster_res.values()]
+                        fig, ax = plt.subplots(figsize=(6.5, 3.5))
+                        ax.bar(cl_labels, cl_scores, color="#00608A")
+                        ax.set_title("Silhouette Scores by Algorithm", color="#00608A", fontweight='bold')
+                        ax.spines['top'].set_visible(False)
+                        ax.spines['right'].set_visible(False)
+                        plt.xticks(rotation=45, ha='right')
+                        plt.tight_layout()
+                        img_buf = io.BytesIO()
+                        plt.savefig(img_buf, format='png', dpi=150)
+                        img_buf.seek(0); plt.close(fig)
+                        from docx.shared import Inches
+                        dw.add_picture(img_buf, width=Inches(5.5))
+                        dw.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        dw.add_paragraph()
+                    except Exception: pass
 
                 if selected.get("💡 AI Recommendations"):
                     add_sec("💡","AI Recommendations", rgb=(0xB8,0x86,0x0B))
+                    
                     pts = []
-                    if ai_report.get("problem_type"): pts.append(f"Problem Type: {ai_report['problem_type']}")
-                    for m in ai_report.get("recommended_models",[])[:5]: pts.append(f"Recommended Model: {m}")
-                    for f in ai_report.get("important_features",[])[:5]: pts.append(f"Top Feature: {f}")
+                    pts.append(f"Project Objective: {(problem_type or 'N/A').upper()}")
+                    pts.append("Target Metric: F1/R2 Score (Maximization)")
+                    pts.append(f"RECOMMENDED ACTION: Deploy {best_name or 'the top model'} for production use.")
+                    
+                    for m in ai_report.get("recommended_models",[])[:5]: pts.append(f"Suggested Model: {m}")
+                    for f in ai_report.get("important_features",[])[:5]: pts.append(f"Key Feature: {str(f)}")
                     cl = ai_report.get("clustering",{})
-                    if cl.get("recommended"): pts.append(f"Best Clustering: {cl['recommended']} — {cl.get('reason','')}")
+                    if cl.get("recommended"): pts.append(f"Cluster Strategy: {cl['recommended']} — {cl.get('reason','')}")
+                    
                     for pt in pts: add_bullet(pt)
-
+                    
+                    add_sec("🚀", "NEXT STEPS", rgb=(0xB8,0x86,0x0B))
+                    add_bullet("1. Download the Pickle/ONNX model files.")
+                    add_bullet("2. Integrate the model into your application pipeline.")
+                    add_bullet("3. Monitor model drift with fresh data over time.")
                 # Add a native footer with page numbers
                 for section in dw.sections:
-                    footer = section.footer
-                    fp = footer.paragraphs[0]
+                    doc_footer = section.footer
+                    fp = doc_footer.paragraphs[0]
                     fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     # Add border top to footer
                     add_para_border(fp, hex_c="B0B8E0", sz=12)
