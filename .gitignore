@@ -1,13 +1,13 @@
-# ==============================
+
 # 🐍 Python
-# ==============================
+
 __pycache__/
 *.py[cod]
 *$py.class
 
-# ==============================
+
 # 🧪 Virtual Environments
-# ==============================
+
 .venv/
 venv/
 env/
@@ -15,9 +15,9 @@ ENV/
 env.bak/
 venv.bak/
 
-# ==============================
+
 # 📦 Build & Packaging
-# ==============================
+
 build/
 dist/
 downloads/
@@ -33,9 +33,9 @@ wheels/
 .installed.cfg
 *.egg
 
-# ==============================
+
 # 📊 Data Science / ML
-# ==============================
+
 .ipynb_checkpoints/
 *.pkl
 *.joblib
@@ -47,30 +47,30 @@ wheels/
 data/raw/
 data/processed/
 
-# ==============================
+
 # 📄 Logs & Reports
-# ==============================
+
 *.log
 logs/
 reports/
 
-# ==============================
+
 # 📂 Temp & Cache
-# ==============================
+
 .cache/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
-# ==============================
+
 # 🔐 Environment Variables
-# ==============================
+
 .env
 .env.*
 
-# ==============================
+
 # 🧰 IDE / Editor
-# ==============================
+
 
 # VS Code
 .vscode/
@@ -82,46 +82,46 @@ reports/
 profile_default/
 ipython_config.py
 
-# ==============================
+
 # 🌐 Streamlit
-# ==============================
+
 .streamlit/secrets.toml
 
-# ==============================
+
 # 🐳 System Files
-# ==============================
+
 .DS_Store
 Thumbs.db
 
-# ==============================
+
 # 🧪 Testing
-# ==============================
+
 htmlcov/
 .coverage
 .coverage.*
 nosetests.xml
 coverage.xml
 
-# ==============================
+
 # ⚡ Temporary Files
-# ==============================
+
 tempCodeRunnerFile.py
 *.tmp
 *.temp
 
-# ==============================
+
 # 🧠 Model Export (Generated Files)
-# ==============================
+
 exports/
 models/
 
-# ==============================
+
 # 📦 Database
-# ==============================
+
 *.db
 *.sqlite3
 
-# ==============================
+
 # 🚀 Deployment (Optional)
-# ==============================
+
 .streamlit/config.toml
