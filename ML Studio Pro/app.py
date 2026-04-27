@@ -53,7 +53,7 @@ div[data-testid="stCheckbox"] label{color:var(--text)!important;}
 </style>
 """, unsafe_allow_html=True)
 
-# ── Module imports ─────────────────────────────────────────────
+#  Module imports 
 from modules.file_loader import load_file
 from modules.profiling import get_basic_info, get_column_summary, get_numeric_stats, get_categorical_stats
 from modules.missing_handler import get_missing_summary, fill_missing_values, suggest_missing_strategy
@@ -65,7 +65,7 @@ from modules.clustering import (prepare_clustering_data, run_kmeans, run_dbscan,
 from modules.ai_recommender import recommend_clustering, generate_ai_report, recommend_model_export
 from modules.model_export.export_manager import export_model
 
-# ── Session State ──────────────────────────────────────────────
+#  Session State ─
 DEFAULTS = dict(df_raw=None, df_clean=None, df_cleaned_only=None, step=1,
                 trained_models={}, results_df=None, best_model_name=None,
                 problem_type=None, target_col=None, cluster_results=None,
@@ -76,7 +76,7 @@ for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── Helpers ────────────────────────────────────────────────────
+#  Helpers ─
 PT = dict(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
           font=dict(color='#e8e8f0', family='Syne'),
           xaxis=dict(gridcolor='#2a2a3a', zerolinecolor='#2a2a3a'),
@@ -109,9 +109,9 @@ def detect_problem_type(df, target_col):
         return "classification"
     return "regression"
 
-# ════════════════════════════════════════════════════
+
 # SIDEBAR
-# ════════════════════════════════════════════════════
+
 with st.sidebar:
     st.markdown("""<div style="text-align:center;padding:1rem 0 1.5rem">
     <div style="font-size:2.5rem">⚡</div>
@@ -152,9 +152,9 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("<div style='color:#666680;font-size:.7rem;text-align:center'>ML Studio Pro v2.0</div>", unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════
+
 # PAGE HEADER
-# ════════════════════════════════════════════════════
+
 st.markdown("""<div style="padding:1.5rem 0 .5rem">
 <h1 style="font-family:'Syne',sans-serif;font-weight:800;font-size:2.2rem;margin:0;
     background:linear-gradient(135deg,#7c5cfc,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">
@@ -162,9 +162,9 @@ st.markdown("""<div style="padding:1.5rem 0 .5rem">
 <p style="color:#666680;margin:.3rem 0 0">End-to-end ML Pipeline — Upload → Clean → Preprocess → Train → Visualize → Export</p>
 </div>""", unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 1 — UPLOAD
-# ════════════════════════════════════════════════════════════════
+
 if st.session_state.step == 1:
     sh("📂", "Upload Your Dataset", "CSV, Excel, JSON, XML, YAML, SQLite — all supported")
     col_up, col_demo = st.columns([3, 1])
@@ -231,9 +231,9 @@ if st.session_state.step == 1:
     </div>""", unsafe_allow_html=True)
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 2 — PROFILING
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 2:
     df = st.session_state.df_clean
     sh("🔍", "Data Profiling", "Understand your dataset before cleaning")
@@ -286,9 +286,9 @@ elif st.session_state.step == 2:
         if st.button("Next → Missing Values ▶"): st.session_state.step=3; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 3 — MISSING VALUES
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 3:
     df = st.session_state.df_clean
     sh("🧹", "Handle Missing Values", "Choose strategy per column")
@@ -348,9 +348,9 @@ elif st.session_state.step == 3:
         if st.button("Next → Duplicates ▶"): st.session_state.step=4; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 4 — DUPLICATES
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 4:
     df = st.session_state.df_clean
     sh("♻️", "Handle Duplicates", "Detect and remove duplicate rows")
@@ -402,14 +402,14 @@ elif st.session_state.step == 4:
             st.session_state.step=5; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 5 — PREPROCESSING (NEW)
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 5:
     df = st.session_state.df_clean
     sh("⚙️", "Preprocessing", "Encode, scale, normalize & engineer your features")
 
-    # ── Smart AI Guide ─────────────────────────────────────────
+    #  Smart AI Guide ─
     st.markdown("### 🤖 AI Preprocessing Recommendations")
     ai_rows = []
     for col in df.columns:
@@ -580,9 +580,9 @@ elif st.session_state.step == 5:
         if st.button("Next → Export Clean Data ▶"): st.session_state.step=6; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 6 — EXPORT CLEAN DATA (dual download + training selector)
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 6:
     sh("💾", "Export Clean Dataset", "Download cleaned & preprocessed data — choose which to use for training")
 
@@ -616,7 +616,7 @@ elif st.session_state.step == 6:
 
     col_a, col_b = st.columns(2)
 
-    # ── LEFT: Cleaned-Only ───────────────────────────────────
+    #  LEFT: Cleaned-Only ─
     with col_a:
         st.markdown("""<div class="metric-card" style="margin-bottom:1rem">
         <div style="font-size:1.8rem">🧹</div>
@@ -634,7 +634,7 @@ elif st.session_state.step == 6:
                         file_name=f"cleaned_data.{EXT[fmt_a]}", mime=MIME[fmt_a], key="dlb_cleaned")
                     st.success("✅ Ready!")
 
-    # ── RIGHT: Preprocessed ───────────────────────────────────
+    #  RIGHT: Preprocessed ─
     with col_b:
         st.markdown("""<div class="metric-card" style="margin-bottom:1rem">
         <div style="font-size:1.8rem">⚙️</div>
@@ -652,7 +652,7 @@ elif st.session_state.step == 6:
                         file_name=f"preprocessed_data.{EXT[fmt_b]}", mime=MIME[fmt_b], key="dlb_preprocessed")
                     st.success("✅ Ready!")
 
-    # ── Training Dataset Selector ─────────────────────────────
+    #  Training Dataset Selector ─
     st.markdown("---")
     st.markdown("### 🎯 Dataset to Use for Model Training")
     st.markdown("""<div class="ai-card">
@@ -676,9 +676,9 @@ elif st.session_state.step == 6:
         if st.button("Next → Train Models ▶"): st.session_state.step=7; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 7 — MODEL TRAINING + RESULTS
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 7:
     # Use dataset chosen in Step 6
     _use_prep = st.session_state.training_dataset == "preprocessed"
@@ -697,7 +697,7 @@ elif st.session_state.step == 7:
 
     all_cols = df.columns.tolist()
 
-    # ── AI Analysis FIRST ─────────────────────────────────────
+    #  AI Analysis FIRST ─
     # Use last target col if set, else default to last column
     _default_target = st.session_state.target_col if st.session_state.target_col in all_cols else all_cols[-1]
     _ai_target = _default_target  # temp for AI analysis
@@ -732,7 +732,7 @@ elif st.session_state.step == 7:
 
     st.markdown("---")
 
-    # ── Target Column + Task Type (AFTER AI) ─────────────────
+    #  Target Column + Task Type (AFTER AI) ─
     target_col = st.selectbox("🎯 Target Column (what to predict)", all_cols,
         index=all_cols.index(_default_target) if _default_target in all_cols else len(all_cols)-1)
 
@@ -746,7 +746,7 @@ elif st.session_state.step == 7:
 
     auto_type = detect_problem_type(df, target_col)
 
-    # ── FIXED: Only classification & regression — no clustering here ──
+    #  FIXED: Only classification & regression — no clustering here 
     task_opts = ["classification", "regression"]
     task_type = st.selectbox("📌 Task Type", task_opts,
         index=task_opts.index(auto_type) if auto_type in task_opts else 0)
@@ -893,7 +893,7 @@ elif st.session_state.step == 7:
             st.error(f"❌ Training failed: {e}")
             with st.expander("Debug"): st.code(traceback.format_exc())
 
-    # ── Results displayed after training ──────────────────────
+    #  Results displayed after training 
     if (st.session_state.results_df is not None and
             st.session_state.problem_type in ["classification","regression"]):
         results_df     = st.session_state.results_df
@@ -956,9 +956,9 @@ elif st.session_state.step == 7:
         if st.button("Next → Cluster Visualizer ▶"): st.session_state.step=8; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 8 — CLUSTER VISUALIZER (redesigned — no 3D)
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 8:
     sh("📊", "Cluster Visualizer", "Clustering analysis + interactive data graph builder")
 
@@ -968,7 +968,7 @@ elif st.session_state.step == 8:
     if scaled is None:
         st.warning("Not enough numeric data for clustering. Need ≥2 numeric columns & ≥5 rows.")
     else:
-        # ── SECTION A: Clustering ─────────────────────────────
+        #  SECTION A: Clustering ─
         st.markdown("### 🔵 Clustering Analysis")
         clust_rec = recommend_clustering(df_c)
 
@@ -1041,7 +1041,7 @@ elif st.session_state.step == 8:
                                       xaxis_title="K (Clusters)", yaxis_title="Inertia")
                     st.plotly_chart(fig2, use_container_width=True)
 
-        # ── SECTION B: Interactive Graph Builder ──────────────
+        #  SECTION B: Interactive Graph Builder 
         st.markdown("---")
         st.markdown("### 🎨 Interactive Graph Builder")
         st.markdown("""<div class="ai-card" style="font-size:.85rem">
@@ -1201,9 +1201,9 @@ elif st.session_state.step == 8:
         if st.button("Next → Report & Export ▶"): st.session_state.step=9; st.rerun()
     footer()
 
-# ════════════════════════════════════════════════════════════════
+
 # STEP 9 — REPORT & EXPORT (professional Excel + PDF + Word)
-# ════════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 9:
     sh("📑", "Report & Export", "Download your complete ML session report — Excel, PDF & Word")
 
@@ -1247,7 +1247,7 @@ elif st.session_state.step == 9:
 
     st.markdown("---")
 
-    # ── Equal-height format cards ──────────────────────────────
+    #  Equal-height format cards 
     CARD_H = "170px"
     fc1, fc2, fc3 = st.columns(3)
 
@@ -1688,7 +1688,7 @@ elif st.session_state.step == 9:
                 import datetime as _dt2
                 _now_w = _dt2.datetime.now().strftime("%B %d, %Y  %H:%M")
 
-                # ── Cover page ──────────────────────────────────────────
+                #  Cover page 
                 # Big gradient-like header using a 1-row table
                 cover_tb = dw.add_table(rows=1, cols=1)
                 cover_tb.style = "Table Grid"
@@ -1861,7 +1861,7 @@ elif st.session_state.step == 9:
                 st.error(f"❌ Word error: {e}")
                 with st.expander("Debug"): st.code(traceback.format_exc())
 
-    # ── New Pipeline ──────────────────────────────────────────
+    #  New Pipeline 
     st.markdown("---")
     st.markdown("""<div class="ai-card" style="text-align:center">
     <div style="font-size:1.5rem">🔄</div>
