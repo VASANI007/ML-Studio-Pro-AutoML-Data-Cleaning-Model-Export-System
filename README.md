@@ -39,6 +39,24 @@ It eliminates manual effort and provides **AI-assisted decision-making at every 
 - 📑 AI-generated insights & reports
 - 💾 Export data + models (Pickle, Joblib, ONNX, TensorFlow, Torch)
 
+# 🏆 Comparison with Industry Tools
+
+| Feature / Capability                  | **ML Studio Pro (Your Platform)** | Google AutoML | H2O.ai | DataRobot | KNIME / RapidMiner |
+|-------------------------------------|----------------------------------|---------------|--------|-----------|--------------------|
+| Data Upload                         | ✅ Multi-format                  | ⚠️ Limited    | ✅     | ✅        | ✅                 |
+| Data Cleaning                       | ✅ Manual + AI                   | ❌            | ⚠️     | ⚠️        | ⚠️                |
+| Preprocessing Control               | ✅ Full Control                  | ❌            | ⚠️     | ⚠️        | ✅                 |
+| AI Suggestions                      | ✅ Strong (USP)                  | ❌            | ⚠️     | ⚠️        | ❌                |
+| Model Selection                     | ✅                              | ✅            | ✅     | ✅        | ✅                 |
+| AutoML                              | ⚠️ Basic                        | ✅ Advanced   | ✅     | ✅        | ⚠️                |
+| Clustering + Visualization          | ✅ Integrated                   | ❌            | ⚠️     | ⚠️        | ✅                 |
+| Graph Customization                 | ✅ Advanced                     | ❌            | ❌     | ❌        | ✅                 |
+| Report Export                       | ✅ Excel + PDF + Word           | ❌            | ❌     | ⚠️        | ❌                |
+| UI Simplicity                       | ✅ Very Simple                  | ❌            | ❌     | ❌        | ❌                |
+| Beginner Friendly                   | ✅ High                         | ❌            | ❌     | ❌        | ⚠️                |
+| Deployment Ready                    | ❌                              | ✅            | ✅     | ✅        | ⚠️                |
+| Real-time Prediction API            | ❌                              | ✅            | ✅     | ✅        | ❌                |
+| Enterprise Scalability              | ❌                              | ✅            | ✅     | ✅        | ⚠️                |
 ---
 
 # 🧠 How It Works (Pipeline)
