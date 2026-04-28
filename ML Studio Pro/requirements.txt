@@ -13,3 +13,6 @@ streamlit
 openpyxl
 pyyaml
 scipy
+statsmodels
+python-docx
+docx
